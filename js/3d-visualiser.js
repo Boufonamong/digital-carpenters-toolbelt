@@ -1,49 +1,59 @@
-// 3D Furniture Visualiser – Nevawood Bench Products
-// Anton Morris – Nevawood Joinery
+// 3D Furniture Visualiser --- Nevawood bench product catalogue.
+//
+// Three.js is loaded globally via CDN in 3d-visualiser.html (there is no
+// npm-side dependency for the browser build). Procedural geometry
+// generators here consume dimensions + wood colour and emit box-primitive
+// scene graphs which are exported as GLTF for the downstream Blender
+// rendering pipeline.
 
-var scene, camera, renderer, controls;
-var furnitureGroup = null;
-
-var WOOD_COLOURS = {
+const WOOD_COLOURS = {
     oak:    0xc8a96e,
     pine:   0xd4a96a,
     walnut: 0x7b5230,
     white:  0xf0ede8,
-    dark:   0x2e2319
+    dark:   0x2e2319,
 };
 
-var BENCH_SIZES = [1000,1200,2000,2400,3000,3600,4800,5000,5600,6000];
+const BENCH_SIZES = [1000, 1200, 2000, 2400, 3000, 3600, 4800, 5000, 5600, 6000];
+
+const state = {
+    scene: null,
+    camera: null,
+    renderer: null,
+    controls: null,
+    furnitureGroup: null,
+};
 
 function initViewer() {
-    var container = document.getElementById('viewer');
-    var vw = container.clientWidth;
-    var vh = container.clientHeight;
+    const container = document.getElementById('viewer');
+    const vw = container.clientWidth;
+    const vh = container.clientHeight;
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f2f5);
+    state.scene = new THREE.Scene();
+    state.scene.background = new THREE.Color(0xf0f2f5);
 
-    camera = new THREE.PerspectiveCamera(45, vw / vh, 1, 60000);
-    camera.position.set(2200, 1300, 2600);
+    state.camera = new THREE.PerspectiveCamera(45, vw / vh, 1, 60000);
+    state.camera.position.set(2200, 1300, 2600);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(vw, vh);
-    renderer.shadowMap.enabled = true;
-    container.appendChild(renderer.domElement);
+    state.renderer = new THREE.WebGLRenderer({ antialias: true });
+    state.renderer.setPixelRatio(window.devicePixelRatio);
+    state.renderer.setSize(vw, vh);
+    state.renderer.shadowMap.enabled = true;
+    container.appendChild(state.renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    var sun = new THREE.DirectionalLight(0xffffff, 0.85);
+    state.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.85);
     sun.position.set(2000, 3000, 1500);
     sun.castShadow = true;
-    scene.add(sun);
+    state.scene.add(sun);
 
-    scene.add(new THREE.GridHelper(8000, 32, 0xbbbbbb, 0xdddddd));
+    state.scene.add(new THREE.GridHelper(8000, 32, 0xbbbbbb, 0xdddddd));
 
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.target.set(0, 380, 0);
-    controls.update();
+    state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
+    state.controls.enableDamping = true;
+    state.controls.dampingFactor = 0.08;
+    state.controls.target.set(0, 380, 0);
+    state.controls.update();
 
     window.addEventListener('resize', onResize);
     animate();
@@ -54,230 +64,232 @@ function initViewer() {
 
 function animate() {
     requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
+    state.controls.update();
+    state.renderer.render(state.scene, state.camera);
 }
 
 function onResize() {
-    var container = document.getElementById('viewer');
-    camera.aspect = container.clientWidth / container.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    const container = document.getElementById('viewer');
+    state.camera.aspect = container.clientWidth / container.clientHeight;
+    state.camera.updateProjectionMatrix();
+    state.renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
 function onTypeChange() {
-    var type = document.getElementById('productType').value;
-    var isRound = type === 'roundbench';
+    const type = document.getElementById('productType').value;
+    const isRound = type === 'roundbench';
     document.getElementById('sizeGroup').style.display = isRound ? 'none' : 'block';
     document.getElementById('radiusGroup').style.display = isRound ? 'block' : 'none';
     if (!isRound) populateSizes(type);
 }
 
-function populateSizes(type) {
-    var select = document.getElementById('productSize');
+function populateSizes() {
+    const select = document.getElementById('productSize');
     select.innerHTML = '';
-    BENCH_SIZES.forEach(function(s) {
-        var opt = document.createElement('option');
+    for (const s of BENCH_SIZES) {
+        const opt = document.createElement('option');
         opt.value = s;
-        opt.textContent = (s / 1000).toFixed(1) + 'm';
+        opt.textContent = `${(s / 1000).toFixed(1)}m`;
         select.appendChild(opt);
-    });
+    }
     select.value = 2000;
 }
 
 function buildModel() {
-    if (furnitureGroup) {
-        scene.remove(furnitureGroup);
-        furnitureGroup.traverse(function(obj) {
+    if (state.furnitureGroup) {
+        state.scene.remove(state.furnitureGroup);
+        state.furnitureGroup.traverse(obj => {
             if (obj.geometry) obj.geometry.dispose();
             if (obj.material) obj.material.dispose();
         });
     }
 
-    var type = document.getElementById('productType').value;
-    var colKey = document.getElementById('woodColour').value;
-    var colour = WOOD_COLOURS[colKey] || WOOD_COLOURS.oak;
-    var mat = new THREE.MeshLambertMaterial({ color: colour });
-    var edgeMat = new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.25 });
+    const type = document.getElementById('productType').value;
+    const colKey = document.getElementById('woodColour').value;
+    const colour = WOOD_COLOURS[colKey] || WOOD_COLOURS.oak;
+    const mat = new THREE.MeshLambertMaterial({ color: colour });
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.25 });
 
-    furnitureGroup = new THREE.Group();
+    state.furnitureGroup = new THREE.Group();
 
     if (type === 'roundbench') {
-        var radius = parseInt(document.getElementById('productRadius').value) || 1000;
+        const radius = parseInt(document.getElementById('productRadius').value, 10) || 1000;
         buildRoundBench(radius, mat, edgeMat);
-        document.getElementById('modelLabel').textContent = 'Round Bench – ' + (radius / 1000).toFixed(0) + 'm radius';
-        camera.position.set(radius * 2.6, radius * 1.4, radius * 2.6);
-        controls.target.set(0, 400, 0);
+        document.getElementById('modelLabel').textContent = `Round Bench – ${(radius / 1000).toFixed(0)}m radius`;
+        state.camera.position.set(radius * 2.6, radius * 1.4, radius * 2.6);
+        state.controls.target.set(0, 400, 0);
     } else {
-        var len = parseInt(document.getElementById('productSize').value) || 2000;
+        const len = parseInt(document.getElementById('productSize').value, 10) || 2000;
         if (type === 'crossbench') {
             buildCrossBench(len, mat, edgeMat);
-            document.getElementById('modelLabel').textContent = 'Criss-Cross Bench – ' + (len / 1000).toFixed(1) + 'm';
+            document.getElementById('modelLabel').textContent = `Criss-Cross Bench – ${(len / 1000).toFixed(1)}m`;
         } else {
             buildPicnicBench(len, mat, edgeMat);
-            document.getElementById('modelLabel').textContent = 'Pub / Picnic Bench – ' + (len / 1000).toFixed(1) + 'm';
+            document.getElementById('modelLabel').textContent = `Pub / Picnic Bench – ${(len / 1000).toFixed(1)}m`;
         }
-        camera.position.set(len * 0.85, 1200, 2000);
-        controls.target.set(0, 380, 0);
+        state.camera.position.set(len * 0.85, 1200, 2000);
+        state.controls.target.set(0, 380, 0);
     }
 
-    scene.add(furnitureGroup);
-    controls.update();
+    state.scene.add(state.furnitureGroup);
+    state.controls.update();
 }
 
-// adds a box mesh centred at (x, y, z) with optional edge lines
+// Adds a box mesh centred at (x, y, z) with optional edge overlay.
 function addBox(x, y, z, w, h, d, mat, edgeMat) {
-    var geo = new THREE.BoxGeometry(w, h, d);
-    var mesh = new THREE.Mesh(geo, mat);
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    furnitureGroup.add(mesh);
+    state.furnitureGroup.add(mesh);
 
     if (edgeMat) {
-        var edges = new THREE.EdgesGeometry(geo);
-        var lines = new THREE.LineSegments(edges, edgeMat);
+        const edges = new THREE.EdgesGeometry(geo);
+        const lines = new THREE.LineSegments(edges, edgeMat);
         lines.position.set(x, y, z);
-        furnitureGroup.add(lines);
+        state.furnitureGroup.add(lines);
     }
 }
 
-// rotated box for the criss-cross diagonal legs
+// Rotated box for the criss-cross diagonal leg frames.
 function addRotatedBox(x, y, z, w, h, d, rx, ry, rz, mat) {
-    var geo = new THREE.BoxGeometry(w, h, d);
-    var mesh = new THREE.Mesh(geo, mat);
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.rotation.set(rx, ry, rz);
     mesh.castShadow = true;
-    furnitureGroup.add(mesh);
+    state.furnitureGroup.add(mesh);
 
-    var edgeMesh = new THREE.LineSegments(
+    const edgeMesh = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
-        new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.2 })
+        new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.2 }),
     );
     mesh.add(edgeMesh);
 }
 
-// Pub / Picnic Bench – table in the middle, bench seats either side
+// Pub / picnic bench: table top + two bench seats + trestle frames + rails.
 function buildPicnicBench(len, mat, edgeMat) {
-    var tableH = 750, tableT = 44, tableD = 560;
-    var seatH = 460, seatT = 44, seatD = 320;
-    var gap = 70;
-    var legW = 70;
+    const tableH = 750, tableT = 44, tableD = 560;
+    const seatH = 460, seatT = 44, seatD = 320;
+    const gap = 70;
+    const legW = 70;
 
-    var seatZ = tableD / 2 + gap + seatD / 2;
+    const seatZ = tableD / 2 + gap + seatD / 2;
 
-    // table top
     addBox(0, tableH - tableT / 2, 0, len, tableT, tableD, mat, edgeMat);
-
-    // bench seats
     addBox(0, seatH - seatT / 2, -seatZ, len, seatT, seatD, mat, edgeMat);
-    addBox(0, seatH - seatT / 2, +seatZ, len, seatT, seatD, mat, edgeMat);
+    addBox(0, seatH - seatT / 2,  seatZ, len, seatT, seatD, mat, edgeMat);
 
-    // trestle frames at both ends
-    var inset = Math.min(160, len * 0.14);
-    [-len / 2 + inset, len / 2 - inset].forEach(function(lx) {
+    const inset = Math.min(160, len * 0.14);
+    for (const lx of [-len / 2 + inset, len / 2 - inset]) {
         addBox(lx, (tableH - tableT) / 2, -tableD / 4, legW, tableH - tableT, legW, mat, edgeMat);
-        addBox(lx, (tableH - tableT) / 2, +tableD / 4, legW, tableH - tableT, legW, mat, edgeMat);
+        addBox(lx, (tableH - tableT) / 2,  tableD / 4, legW, tableH - tableT, legW, mat, edgeMat);
         addBox(lx, (tableH - tableT) * 0.32, 0, legW, legW, tableD * 0.55, mat, edgeMat);
         addBox(lx, (seatH - seatT) / 2, -seatZ, legW, seatH - seatT, legW, mat, edgeMat);
-        addBox(lx, (seatH - seatT) / 2, +seatZ, legW, seatH - seatT, legW, mat, edgeMat);
-    });
+        addBox(lx, (seatH - seatT) / 2,  seatZ, legW, seatH - seatT, legW, mat, edgeMat);
+    }
 
-    // foot rails
-    var railLen = len - inset * 2;
+    const railLen = len - inset * 2;
     addBox(0, legW / 2, -seatZ, railLen, legW, legW, mat, edgeMat);
-    addBox(0, legW / 2, +seatZ, railLen, legW, legW, mat, edgeMat);
+    addBox(0, legW / 2,  seatZ, railLen, legW, legW, mat, edgeMat);
 }
 
-// Criss-Cross Bench – single seat with X-shaped leg frames
+// Criss-cross bench: seat plank with X-frame legs at each end.
 function buildCrossBench(len, mat, edgeMat) {
-    var seatH = 600, seatT = 44, seatD = 300;
-    var legW = 50;
-    var inset = Math.min(140, len * 0.12);
+    const seatH = 600, seatT = 44, seatD = 300;
+    const legW = 50;
+    const inset = Math.min(140, len * 0.12);
 
     addBox(0, seatH - seatT / 2, 0, len, seatT, seatD, mat, edgeMat);
 
-    var frameH = seatH - seatT;
-    var halfD = seatD / 2;
-    var diagLen = Math.sqrt(frameH * frameH + (halfD * 2) * (halfD * 2));
-    var tilt = Math.atan2(halfD * 2, frameH);
+    const frameH = seatH - seatT;
+    const halfD = seatD / 2;
+    const diagLen = Math.hypot(frameH, halfD * 2);
+    const tilt = Math.atan2(halfD * 2, frameH);
 
-    [-len / 2 + inset, len / 2 - inset].forEach(function(lx) {
+    for (const lx of [-len / 2 + inset, len / 2 - inset]) {
         addRotatedBox(lx, frameH / 2, 0, legW, diagLen, legW,  tilt, 0, 0, mat);
         addRotatedBox(lx, frameH / 2, 0, legW, diagLen, legW, -tilt, 0, 0, mat);
-    });
+    }
 
     addBox(0, legW / 2, 0, len - inset, legW, legW, mat, edgeMat);
 }
 
-// Round Bench – ring seat with central table
+// Round bench: seat ring assembled from arc segments, central table.
 function buildRoundBench(radius, mat, edgeMat) {
-    var seatH = 450, seatT = 44;
-    var innerR = radius * 0.68;
-    var midR = (radius + innerR) / 2;
-    var seatWidth = radius - innerR;
-    var N = 36;
+    const seatH = 450, seatT = 44;
+    const innerR = radius * 0.68;
+    const midR = (radius + innerR) / 2;
+    const seatWidth = radius - innerR;
+    const N = 36;
 
-    for (var i = 0; i < N; i++) {
-        var angle = (i / N) * Math.PI * 2;
-        var cx = Math.cos(angle) * midR;
-        var cz = Math.sin(angle) * midR;
-        var segLen = 2 * Math.PI * midR / N * 1.05;
+    for (let i = 0; i < N; i++) {
+        const angle = (i / N) * Math.PI * 2;
+        const cx = Math.cos(angle) * midR;
+        const cz = Math.sin(angle) * midR;
+        const segLen = 2 * Math.PI * midR / N * 1.05;
 
-        var geo = new THREE.BoxGeometry(segLen, seatT, seatWidth);
-        var mesh = new THREE.Mesh(geo, mat);
+        const geo = new THREE.BoxGeometry(segLen, seatT, seatWidth);
+        const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(cx, seatH - seatT / 2, cz);
         mesh.rotation.y = -angle;
         mesh.castShadow = true;
-        furnitureGroup.add(mesh);
+        state.furnitureGroup.add(mesh);
 
         if (i % 4 === 0) {
-            var edgeMesh = new THREE.LineSegments(
+            const edgeMesh = new THREE.LineSegments(
                 new THREE.EdgesGeometry(geo),
-                new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.18 })
+                new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.18 }),
             );
             mesh.add(edgeMesh);
         }
     }
 
-    // support posts under the seat ring
-    var numPosts = Math.max(4, Math.round(2 * Math.PI * radius / 700));
-    var postH = seatH - seatT;
-    for (var j = 0; j < numPosts; j++) {
-        var a = (j / numPosts) * Math.PI * 2;
+    const numPosts = Math.max(4, Math.round(2 * Math.PI * radius / 700));
+    const postH = seatH - seatT;
+    for (let j = 0; j < numPosts; j++) {
+        const a = (j / numPosts) * Math.PI * 2;
         addBox(Math.cos(a) * midR, postH / 2, Math.sin(a) * midR, 80, postH, 80, mat, edgeMat);
     }
 
-    // central post and table top
-    var tableH = 638, tableTopT = 44;
-    var tableTopR = radius * 0.77;
+    const tableH = 638, tableTopT = 44;
+    const tableTopR = radius * 0.77;
 
     addBox(0, tableH / 2, 0, 120, tableH, 120, mat, edgeMat);
 
-    var tableGeo = new THREE.CylinderGeometry(tableTopR, tableTopR, tableTopT, 40);
-    var tableMesh = new THREE.Mesh(tableGeo, mat);
+    const tableGeo = new THREE.CylinderGeometry(tableTopR, tableTopR, tableTopT, 40);
+    const tableMesh = new THREE.Mesh(tableGeo, mat);
     tableMesh.position.set(0, tableH - tableTopT / 2, 0);
     tableMesh.castShadow = true;
-    furnitureGroup.add(tableMesh);
+    state.furnitureGroup.add(tableMesh);
     tableMesh.add(new THREE.LineSegments(
         new THREE.EdgesGeometry(tableGeo),
-        new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.2 })
+        new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.2 }),
     ));
 }
 
 function exportGLTF() {
-    if (!furnitureGroup) { alert('Generate a model first.'); return; }
+    if (!state.furnitureGroup) {
+        alert('Generate a model first.');
+        return;
+    }
 
-    var type = document.getElementById('productType').value;
-    var exporter = new THREE.GLTFExporter();
-    exporter.parse(furnitureGroup, function(gltf) {
-        var blob = new Blob([JSON.stringify(gltf)], { type: 'application/json' });
-        var a = document.createElement('a');
+    const type = document.getElementById('productType').value;
+    const exporter = new THREE.GLTFExporter();
+    exporter.parse(state.furnitureGroup, gltf => {
+        const blob = new Blob([JSON.stringify(gltf)], { type: 'application/json' });
+        const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'nevawood-' + type + '.gltf';
+        a.download = `nevawood-${type}.gltf`;
         a.click();
     });
 }
 
 window.addEventListener('load', initViewer);
+
+Object.assign(window, {
+    onTypeChange,
+    buildModel,
+    exportGLTF,
+});
