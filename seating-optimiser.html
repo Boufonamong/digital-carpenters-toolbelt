@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Planner – Digital Carpenter's Toolbelt</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <button class="burger-btn" onclick="toggleMenu()">&#9776;</button>
+
+    <div class="nav-overlay" id="navOverlay" onclick="toggleMenu()"></div>
+
+    <nav class="nav-drawer" id="navDrawer">
+        <div class="drawer-top">
+            <img src="logo.png" class="drawer-logo" alt="">
+            <button class="drawer-close" onclick="toggleMenu()">&#10005;</button>
+        </div>
+        <div class="drawer-section">
+            <p class="drawer-label">Tools</p>
+            <a href="index.html" class="drawer-link">&#8962; Dashboard</a>
+            <a href="sheet-optimiser.html" class="drawer-link">Sheet Material Optimiser</a>
+            <a href="seating-optimiser.html" class="drawer-link active">Space Planner</a>
+            <a href="workshop-optimiser.html" class="drawer-link">Workshop Layout Optimiser</a>
+            <a href="3d-visualiser.html" class="drawer-link">3D Furniture Visualiser</a>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Export</p>
+            <button class="drawer-action" onclick="saveSeatingImage();toggleMenu()">&#8595; Save Floor Plan (PNG)</button>
+            <button class="drawer-action" onclick="exportSeatingCSV();toggleMenu()">&#8595; Export Layout Data (CSV)</button>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Settings</p>
+            <span class="drawer-link" style="opacity:0.4;cursor:default">More options coming soon</span>
+        </div>
+        <div class="drawer-footer">Anton Morris &mdash; 2274309 &mdash; Nevawood Joinery</div>
+    </nav>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navDrawer').classList.toggle('open');
+            document.getElementById('navOverlay').classList.toggle('open');
+        }
+    </script>
+
+    <main>
+        <div class="tool-page">
+
+            <aside>
+                <div class="panel">
+                    <h2>Space</h2>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Width (m)</label>
+                            <input type="number" id="roomW" value="10" min="1" step="0.5">
+                        </div>
+                        <div class="form-group">
+                            <label>Depth (m)</label>
+                            <input type="number" id="roomD" value="15" min="1" step="0.5">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Service Aisle Width (mm)</label>
+                        <input type="number" id="aisleGap" value="900" min="600" step="100">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Layout Mode</label>
+                        <select id="layoutMode" onchange="onModeChange()">
+                            <option value="bench">Nevawood Bench Products</option>
+                            <option value="venue">Venue Seating</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="benchPanel">
+                <div class="panel mt-12">
+                    <h2>Add Product</h2>
+
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select id="productType" onchange="onProductTypeChange()">
+                            <option value="picnic">Pub / Picnic Bench</option>
+                            <option value="crossbench">Criss-Cross Bench</option>
+                            <option value="roundbench">Round Bench</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="sizeGroup">
+                        <label>Length</label>
+                        <select id="productSize"></select>
+                    </div>
+
+                    <div class="form-group" id="radiusGroup" style="display:none">
+                        <label>Radius</label>
+                        <select id="productRadius">
+                            <option value="1000">1m</option>
+                            <option value="2000">2m</option>
+                            <option value="3000">3m</option>
+                            <option value="4000">4m</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-secondary" onclick="addProduct()" style="width:100%">Add to Layout</button>
+
+                    <hr class="divider">
+
+                    <div id="productList" class="tool-list">
+                        <div class="empty-state"><p>No products added yet</p></div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="runLayout()">Generate Layout</button>
+                    <button class="btn btn-secondary mt-8" style="width:100%" onclick="clearProducts()">Clear All</button>
+                </div>
+                </div>
+
+                <div id="venuePanel" class="panel mt-12" style="display:none">
+                    <h2>Venue Style</h2>
+                    <div class="form-group">
+                        <label>Style</label>
+                        <select id="venueStyle">
+                            <option value="theatre">Theatre</option>
+                            <option value="classroom">Classroom</option>
+                            <option value="boardroom">Boardroom</option>
+                            <option value="church">Church</option>
+                            <option value="pub">Pub / Bar</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="runLayout()">Generate Layout</button>
+                </div>
+            </aside>
+
+            <div>
+                <div id="emptyResults" class="panel">
+                    <div class="empty-state">
+                        <svg width="60" height="60" viewBox="0 0 60 60" fill="none" opacity="0.3">
+                            <rect x="4" y="4" width="52" height="52" rx="2" stroke="#2c3e50" stroke-width="2"/>
+                            <rect x="8" y="10" width="20" height="8" rx="1" fill="#2c3e50" opacity="0.5"/>
+                            <rect x="8" y="22" width="20" height="8" rx="1" fill="#2c3e50" opacity="0.4"/>
+                            <rect x="8" y="34" width="12" height="8" rx="1" fill="#2c3e50" opacity="0.3"/>
+                            <circle cx="44" cy="38" r="10" stroke="#2c3e50" stroke-width="2" fill="none" opacity="0.5"/>
+                        </svg>
+                        <p>Add your space dimensions and Nevawood products, then Generate.</p>
+                    </div>
+                </div>
+
+                <div id="results" style="display:none">
+
+                    <div class="panel">
+                        <h2>Results</h2>
+                        <div class="stats-row">
+                            <div class="stat-box good">
+                                <span class="stat-value" id="statUnits">–</span>
+                                <span class="stat-label" id="statUnitsLabel">Units Placed</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-value" id="statCovers">–</span>
+                                <span class="stat-label">Est. Covers</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-value" id="statUtil">–</span>
+                                <span class="stat-label">Space Used</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel mt-12">
+                        <h2>Floor Plan</h2>
+                        <div class="canvas-container">
+                            <div class="canvas-label" id="layoutLabel">Space Layout</div>
+                            <canvas id="seatingCanvas" width="700" height="500"></canvas>
+                        </div>
+                        <p class="text-sm text-muted mt-8" id="layoutInfo"></p>
+                        <div style="display:flex;gap:8px;margin-top:10px">
+                            <button class="btn btn-secondary" onclick="saveSeatingImage()" style="font-size:0.8rem;padding:7px 14px">&#8595; Save Image</button>
+                            <button class="btn btn-secondary" onclick="exportSeatingCSV()" style="font-size:0.8rem;padding:7px 14px">&#8595; Export CSV</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer>
+        <p>Digital Carpenter's Toolbelt &mdash; Anton Morris &mdash; 2274309</p>
+    </footer>
+
+    <script src="js/seating-optimiser.js"></script>
+    <script>
+        populateSizes('picnic'); // load default sizes on page load
+    </script>
+</body>
+</html>
