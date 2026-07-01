@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Furniture Visualiser – Digital Carpenter's Toolbelt</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        #viewer { width:100%; height:540px; border-radius:6px; overflow:hidden; background:#f0f2f5; }
+        #viewer canvas { display:block; }
+    </style>
+</head>
+<body>
+
+    <button class="burger-btn" onclick="toggleMenu()">&#9776;</button>
+
+    <div class="nav-overlay" id="navOverlay" onclick="toggleMenu()"></div>
+
+    <nav class="nav-drawer" id="navDrawer">
+        <div class="drawer-top">
+            <img src="logo.png" class="drawer-logo" alt="">
+            <button class="drawer-close" onclick="toggleMenu()">&#10005;</button>
+        </div>
+        <div class="drawer-section">
+            <p class="drawer-label">Tools</p>
+            <a href="index.html" class="drawer-link">&#8962; Dashboard</a>
+            <a href="sheet-optimiser.html" class="drawer-link">Sheet Material Optimiser</a>
+            <a href="seating-optimiser.html" class="drawer-link">Space Planner</a>
+            <a href="workshop-optimiser.html" class="drawer-link">Workshop Layout Optimiser</a>
+            <a href="3d-visualiser.html" class="drawer-link active">3D Furniture Visualiser</a>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Export</p>
+            <button class="drawer-action" onclick="exportGLTF();toggleMenu()">&#8595; Download Model (GLTF)</button>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Settings</p>
+            <span class="drawer-link" style="opacity:0.4;cursor:default">More options coming soon</span>
+        </div>
+        <div class="drawer-footer">Anton Morris &mdash; 2274309 &mdash; Nevawood Joinery</div>
+    </nav>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navDrawer').classList.toggle('open');
+            document.getElementById('navOverlay').classList.toggle('open');
+        }
+    </script>
+
+    <main>
+        <div class="tool-page">
+
+            <aside>
+                <div class="panel">
+                    <h2>Bench</h2>
+
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select id="productType" onchange="onTypeChange()">
+                            <option value="picnic">Pub / Picnic Bench</option>
+                            <option value="crossbench">Criss-Cross Bench</option>
+                            <option value="roundbench">Round Bench</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="sizeGroup">
+                        <label>Length</label>
+                        <select id="productSize"></select>
+                    </div>
+
+                    <div class="form-group" id="radiusGroup" style="display:none">
+                        <label>Radius</label>
+                        <select id="productRadius">
+                            <option value="1000">1m</option>
+                            <option value="2000">2m</option>
+                            <option value="3000">3m</option>
+                            <option value="4000">4m</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Wood Finish</label>
+                        <select id="woodColour">
+                            <option value="oak">Oak (light)</option>
+                            <option value="pine">Pine (pale)</option>
+                            <option value="walnut">Walnut (dark)</option>
+                            <option value="white">White / Painted</option>
+                            <option value="dark">Ebonised</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="buildModel()" style="width:100%">Generate 3D Model</button>
+                </div>
+
+                <div class="panel mt-12">
+                    <h2>Controls</h2>
+                    <p class="text-sm text-muted" style="margin-bottom:6px">Left drag &mdash; rotate</p>
+                    <p class="text-sm text-muted" style="margin-bottom:6px">Right drag &mdash; pan</p>
+                    <p class="text-sm text-muted">Scroll wheel &mdash; zoom</p>
+                </div>
+            </aside>
+
+            <div>
+                <div class="panel">
+                    <h2>3D Preview</h2>
+                    <div id="viewer"></div>
+                    <p class="text-sm text-muted mt-8" id="modelLabel">Set parameters above and hit Generate.</p>
+                    <div style="margin-top:10px">
+                        <button class="btn btn-secondary" onclick="exportGLTF()" style="font-size:0.8rem;padding:7px 14px">&#8595; Download GLTF</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer>
+        <p>Digital Carpenter's Toolbelt &mdash; Anton Morris &mdash; 2274309</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <script src="js/3d-visualiser.js"></script>
+</body>
+</html>
