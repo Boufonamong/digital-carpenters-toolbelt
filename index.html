@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Carpenter's Toolbelt</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <button class="burger-btn" onclick="toggleMenu()">&#9776;</button>
+
+    <div class="nav-overlay" id="navOverlay" onclick="toggleMenu()"></div>
+
+    <nav class="nav-drawer" id="navDrawer">
+        <div class="drawer-top">
+            <img src="logo.png" class="drawer-logo" alt="">
+            <button class="drawer-close" onclick="toggleMenu()">&#10005;</button>
+        </div>
+        <div class="drawer-section">
+            <p class="drawer-label">Tools</p>
+            <a href="index.html" class="drawer-link active">&#8962; Dashboard</a>
+            <a href="sheet-optimiser.html" class="drawer-link">Sheet Material Optimiser</a>
+            <a href="seating-optimiser.html" class="drawer-link">Space Planner</a>
+            <a href="workshop-optimiser.html" class="drawer-link">Workshop Layout Optimiser</a>
+            <a href="3d-visualiser.html" class="drawer-link">3D Furniture Visualiser</a>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Settings</p>
+            <span class="drawer-link" style="opacity:0.4;cursor:default">More options coming soon</span>
+        </div>
+        <div class="drawer-footer">Anton Morris &mdash; 2274309 &mdash; Nevawood Joinery</div>
+    </nav>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navDrawer').classList.toggle('open');
+            document.getElementById('navOverlay').classList.toggle('open');
+        }
+    </script>
+
+    <main class="dashboard">
+
+        <h1 style="font-size:1.4rem; font-weight:700; margin-bottom:6px;">Digital Carpenter's Toolbelt</h1>
+        <p style="color:var(--text-light); margin-bottom:24px; font-size:0.9rem;">Nevawood Joinery &mdash; Anton Morris</p>
+
+        <div class="tool-grid">
+
+            <a href="sheet-optimiser.html" class="tool-card">
+                <div class="tool-card-body">
+                    <h3>Sheet Material Optimiser</h3>
+                    <p>Enter your cut list and it works out the best layout across your sheets. Cuts waste, gives you a diagram and CSV to take to the saw.</p>
+                </div>
+            </a>
+
+            <a href="seating-optimiser.html" class="tool-card">
+                <div class="tool-card-body">
+                    <h3>Space Planner</h3>
+                    <p>Put in a room or outdoor area and it fits our bench products in, or lays out seating for venues. Exports a floor plan.</p>
+                </div>
+            </a>
+
+            <a href="workshop-optimiser.html" class="tool-card">
+                <div class="tool-card-body">
+                    <h3>Workshop Layout Optimiser</h3>
+                    <p>Arrange machines in the workshop by workflow type. Shows clearance zones and material flow on a floor plan.</p>
+                </div>
+            </a>
+
+            <a href="3d-visualiser.html" class="tool-card">
+                <div class="tool-card-body">
+                    <h3>3D Furniture Visualiser</h3>
+                    <p>Preview bench products in 3D with different sizes and wood finishes. Still being improved - geometry is basic at this stage.</p>
+                </div>
+            </a>
+
+        </div>
+
+    </main>
+
+    <footer>
+        <p>Digital Carpenter's Toolbelt &mdash; Anton Morris &mdash; 2274309</p>
+    </footer>
+
+</body>
+</html>
