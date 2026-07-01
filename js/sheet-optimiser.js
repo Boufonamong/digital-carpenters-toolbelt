@@ -1,33 +1,39 @@
-// Sheet Material Optimiser
-// FFD (First Fit Decreasing) + Guillotine Split algorithm
-// Anton Morris – Nevawood Joinery
+// Sheet Material Optimiser --- UI wrapper.
+// Algorithm implementation lives in js/algorithms/sheet-packing.js.
 
-// colour palette for pieces on the diagram
-var COLOURS = [
+import {
+    packSheets,
+    calculateEfficiency,
+} from './algorithms/sheet-packing.js';
+
+// Colour palette used to distinguish pieces on the cut diagram.
+const COLOURS = [
     '#7ec8e3', '#f7b2b7', '#b5ead7', '#ffd6a5',
     '#c3b1e1', '#caffbf', '#fdffb6', '#a0c4ff',
-    '#ffadad', '#d4a5a5', '#9bf6ff', '#bdb2ff'
+    '#ffadad', '#d4a5a5', '#9bf6ff', '#bdb2ff',
 ];
 
-// pieces the user has added
-var pieces = [];
-var colourIndex = 0;
-
-// the result from the last calculation
-var sheets = [];
-var currentSheet = 0;
-var lastSheetW = 0, lastSheetH = 0;
-
-// preset sheet sizes in mm
-var SHEET_PRESETS = {
+const SHEET_PRESETS = {
     plywood: { w: 2440, h: 1220 },
     mdf:     { w: 2800, h: 2070 },
-    veneer:  { w: 2440, h: 1220 }
+    veneer:  { w: 2440, h: 1220 },
 };
 
+// Mutable UI state kept in a single object so it's easy to reason about.
+const state = {
+    pieces: [],
+    colourIndex: 0,
+    sheets: [],
+    currentSheet: 0,
+    lastSheetW: 0,
+    lastSheetH: 0,
+};
+
+// ---- Event handlers (exposed to window for inline HTML onclick) ----
+
 function onMaterialChange() {
-    var type = document.getElementById('materialType').value;
-    var customRow = document.getElementById('customSizeRow');
+    const type = document.getElementById('materialType').value;
+    const customRow = document.getElementById('customSizeRow');
 
     if (type === 'custom') {
         customRow.style.display = 'grid';
@@ -41,20 +47,20 @@ function onMaterialChange() {
 }
 
 function addPiece() {
-    var name = document.getElementById('pieceName').value.trim() || 'Piece ' + (pieces.length + 1);
-    var w    = parseFloat(document.getElementById('pieceW').value);
-    var h    = parseFloat(document.getElementById('pieceH').value);
-    var qty  = parseInt(document.getElementById('pieceQty').value) || 1;
+    const name = document.getElementById('pieceName').value.trim() || `Piece ${state.pieces.length + 1}`;
+    const w = parseFloat(document.getElementById('pieceW').value);
+    const h = parseFloat(document.getElementById('pieceH').value);
+    const qty = parseInt(document.getElementById('pieceQty').value, 10) || 1;
 
     if (!w || !h || w <= 0 || h <= 0) {
         alert('Please enter valid dimensions for the piece.');
         return;
     }
 
-    var colour = COLOURS[colourIndex % COLOURS.length];
-    colourIndex++;
+    const colour = COLOURS[state.colourIndex % COLOURS.length];
+    state.colourIndex++;
 
-    pieces.push({ name: name, w: w, h: h, qty: qty, colour: colour });
+    state.pieces.push({ name, w, h, qty, colour });
     renderPieceList();
     clearInputs();
 }
@@ -67,233 +73,148 @@ function clearInputs() {
 }
 
 function removePiece(index) {
-    pieces.splice(index, 1);
+    state.pieces.splice(index, 1);
     renderPieceList();
 }
 
 function renderPieceList() {
-    var list = document.getElementById('pieceList');
+    const list = document.getElementById('pieceList');
 
-    if (pieces.length === 0) {
+    if (state.pieces.length === 0) {
         list.innerHTML = '<div class="empty-state"><p>No pieces added yet</p></div>';
         return;
     }
 
-    var html = '';
-    pieces.forEach(function(p, i) {
-        html += '<div class="piece-item">';
-        html += '<div class="piece-item-info">';
-        html += '<div class="piece-color-dot" style="background:' + p.colour + '"></div>';
-        html += '<span class="piece-item-name">' + p.name + '</span>';
-        html += '<span class="piece-item-dims">' + p.w + '&times;' + p.h + ' &times;' + p.qty + '</span>';
-        html += '</div>';
-        html += '<button class="btn-danger" onclick="removePiece(' + i + ')">&#10005;</button>';
-        html += '</div>';
-    });
+    const html = state.pieces.map((p, i) => `
+        <div class="piece-item">
+            <div class="piece-item-info">
+                <div class="piece-color-dot" style="background:${p.colour}"></div>
+                <span class="piece-item-name">${p.name}</span>
+                <span class="piece-item-dims">${p.w}&times;${p.h} &times;${p.qty}</span>
+            </div>
+            <button class="btn-danger" onclick="removePiece(${i})">&#10005;</button>
+        </div>
+    `).join('');
 
     list.innerHTML = html;
 }
 
 function clearAll() {
-    pieces = [];
-    colourIndex = 0;
-    sheets = [];
+    state.pieces = [];
+    state.colourIndex = 0;
+    state.sheets = [];
     renderPieceList();
     document.getElementById('results').style.display = 'none';
     document.getElementById('emptyResults').style.display = 'block';
 }
 
-// ---- The algorithm ----
+// ---- Run the algorithm and display results ----
 
 function runOptimiser() {
-    if (pieces.length === 0) {
+    if (state.pieces.length === 0) {
         alert('Add at least one piece first.');
         return;
     }
 
-    var material = document.getElementById('materialType').value;
-    var sheetW   = parseFloat(document.getElementById('sheetW').value) || SHEET_PRESETS['plywood'].w;
-    var sheetH   = parseFloat(document.getElementById('sheetH').value) || SHEET_PRESETS['plywood'].h;
-    var kerf     = parseFloat(document.getElementById('kerf').value) || 3;
-    var noRotate = (material === 'veneer'); // grain direction – can't rotate veneer
+    const material = document.getElementById('materialType').value;
+    const sheetW = parseFloat(document.getElementById('sheetW').value) || SHEET_PRESETS.plywood.w;
+    const sheetH = parseFloat(document.getElementById('sheetH').value) || SHEET_PRESETS.plywood.h;
+    const kerf = parseFloat(document.getElementById('kerf').value) || 3;
+    const noRotate = material === 'veneer';
 
-    // expand pieces out by quantity
-    var allPieces = [];
-    pieces.forEach(function(p) {
-        for (var i = 0; i < p.qty; i++) {
-            allPieces.push({ name: p.name, w: p.w, h: p.h, colour: p.colour });
-        }
+    const { sheets, allPieces } = packSheets({
+        pieces: state.pieces,
+        sheetW,
+        sheetH,
+        kerf,
+        noRotate,
     });
 
-    // FFD – sort biggest area first
-    allPieces.sort(function(a, b) {
-        return (b.w * b.h) - (a.w * a.h);
-    });
-
-    lastSheetW = sheetW;
-    lastSheetH = sheetH;
-    sheets = [];
-
-    allPieces.forEach(function(piece) {
-        var placed = false;
-
-        for (var s = 0; s < sheets.length; s++) {
-            var result = tryPlace(piece, sheets[s].freeRects, kerf, sheetW, sheetH, noRotate);
-            if (result) {
-                sheets[s].placed.push(result.placedPiece);
-                sheets[s].freeRects = result.freeRects;
-                placed = true;
-                break;
-            }
-        }
-
-        if (!placed) {
-            // need a new sheet
-            var newSheet = {
-                placed: [],
-                freeRects: [{ x: 0, y: 0, w: sheetW, h: sheetH }]
-            };
-            var result2 = tryPlace(piece, newSheet.freeRects, kerf, sheetW, sheetH, noRotate);
-            if (result2) {
-                newSheet.placed.push(result2.placedPiece);
-                newSheet.freeRects = result2.freeRects;
-            }
-            sheets.push(newSheet);
-        }
-    });
+    state.sheets = sheets;
+    state.lastSheetW = sheetW;
+    state.lastSheetH = sheetH;
 
     showResults(sheetW, sheetH, allPieces);
 }
 
-// try to fit a piece into the first available free rect on a sheet
-function tryPlace(piece, freeRects, kerf, sheetW, sheetH, noRotate) {
-    for (var i = 0; i < freeRects.length; i++) {
-        var r = freeRects[i];
-
-        // normal orientation
-        if (piece.w <= r.w && piece.h <= r.h) {
-            return guillotineSplit(piece.w, piece.h, piece, r, i, freeRects, kerf);
-        }
-
-        // try rotating (not for veneer – grain matters)
-        if (!noRotate && piece.h <= r.w && piece.w <= r.h) {
-            return guillotineSplit(piece.h, piece.w, piece, r, i, freeRects, kerf);
-        }
-    }
-    return null;
-}
-
-// guillotine split – place piece and split remaining space into two free rects
-function guillotineSplit(fitW, fitH, piece, rect, rectIndex, freeRects, kerf) {
-    var newRects = freeRects.filter(function(_, idx) { return idx !== rectIndex; });
-
-    // space to the right of the piece
-    var rightW = rect.w - fitW - kerf;
-    if (rightW > 0) {
-        newRects.push({ x: rect.x + fitW + kerf, y: rect.y, w: rightW, h: fitH });
-    }
-
-    // space below the piece (full width of the original rect)
-    var belowH = rect.h - fitH - kerf;
-    if (belowH > 0) {
-        newRects.push({ x: rect.x, y: rect.y + fitH + kerf, w: rect.w, h: belowH });
-    }
-
-    return {
-        placedPiece: { name: piece.name, w: fitW, h: fitH, x: rect.x, y: rect.y, colour: piece.colour },
-        freeRects: newRects
-    };
-}
-
-// ---- Display results ----
-
 function showResults(sheetW, sheetH, allPieces) {
-    var totalPieceArea = 0;
-    allPieces.forEach(function(p) { totalPieceArea += p.w * p.h; });
+    const efficiency = calculateEfficiency(
+        state.sheets.flatMap(s => s.placed),
+        state.sheets.length,
+        sheetW,
+        sheetH,
+    );
+    const effPct = (efficiency * 100).toFixed(1);
+    const wastePct = (100 - efficiency * 100).toFixed(1);
 
-    var totalSheetArea = sheets.length * sheetW * sheetH;
-    var efficiency = ((totalPieceArea / totalSheetArea) * 100).toFixed(1);
-    var waste = (100 - efficiency).toFixed(1);
-
-    document.getElementById('statSheets').textContent = sheets.length;
-    document.getElementById('statEfficiency').textContent = efficiency + '%';
-    document.getElementById('statWaste').textContent = waste + '%';
+    document.getElementById('statSheets').textContent = state.sheets.length;
+    document.getElementById('statEfficiency').textContent = `${effPct}%`;
+    document.getElementById('statWaste').textContent = `${wastePct}%`;
     document.getElementById('statPieces').textContent = allPieces.length;
 
-    // colour the efficiency box based on how good it is
-    var effBox = document.getElementById('effBox');
+    const effBox = document.getElementById('effBox');
     effBox.className = 'stat-box';
-    if (efficiency >= 75) effBox.classList.add('good');
-    else if (efficiency >= 60) effBox.classList.add('warn');
+    if (efficiency >= 0.75) effBox.classList.add('good');
+    else if (efficiency >= 0.60) effBox.classList.add('warn');
 
     buildSheetTabs(sheetW, sheetH);
 
     document.getElementById('emptyResults').style.display = 'none';
     document.getElementById('results').style.display = 'block';
 
-    currentSheet = 0;
+    state.currentSheet = 0;
     drawSheet(0, sheetW, sheetH);
 }
 
 function buildSheetTabs(sheetW, sheetH) {
-    var tabs = document.getElementById('sheetTabs');
+    const tabs = document.getElementById('sheetTabs');
     tabs.innerHTML = '';
 
-    sheets.forEach(function(_, i) {
-        var btn = document.createElement('button');
-        btn.className = 'sheet-tab' + (i === 0 ? ' active' : '');
-        btn.textContent = 'Sheet ' + (i + 1);
-        btn.onclick = (function(idx) {
-            return function() {
-                currentSheet = idx;
-                document.querySelectorAll('.sheet-tab').forEach(function(t) { t.classList.remove('active'); });
-                btn.classList.add('active');
-                drawSheet(idx, sheetW, sheetH);
-            };
-        })(i);
+    state.sheets.forEach((_, i) => {
+        const btn = document.createElement('button');
+        btn.className = `sheet-tab${i === 0 ? ' active' : ''}`;
+        btn.textContent = `Sheet ${i + 1}`;
+        btn.addEventListener('click', () => {
+            state.currentSheet = i;
+            document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            drawSheet(i, sheetW, sheetH);
+        });
         tabs.appendChild(btn);
     });
 }
 
 function drawSheet(sheetIndex, sheetW, sheetH) {
-    var canvas = document.getElementById('cutCanvas');
-    var ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('cutCanvas');
+    const ctx = canvas.getContext('2d');
 
-    // scale to fit the canvas
-    var canvasW = 700;
-    var scale = canvasW / sheetW;
-    var canvasH = Math.round(sheetH * scale);
+    const canvasW = 700;
+    const scale = canvasW / sheetW;
+    const canvasH = Math.round(sheetH * scale);
 
     canvas.width = canvasW;
     canvas.height = canvasH;
 
-    // sheet background
     ctx.fillStyle = '#f9f9f9';
     ctx.fillRect(0, 0, canvasW, canvasH);
-
-    // border
     ctx.strokeStyle = '#aaa';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, canvasW, canvasH);
 
-    var sheet = sheets[sheetIndex];
+    const sheet = state.sheets[sheetIndex];
 
-    sheet.placed.forEach(function(piece) {
-        var px = piece.x * scale;
-        var py = piece.y * scale;
-        var pw = piece.w * scale;
-        var ph = piece.h * scale;
+    for (const piece of sheet.placed) {
+        const px = piece.x * scale;
+        const py = piece.y * scale;
+        const pw = piece.w * scale;
+        const ph = piece.h * scale;
 
-        // fill
         ctx.fillStyle = piece.colour;
         ctx.fillRect(px, py, pw, ph);
 
-        // outline
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-        ctx.lineWidth = 1;
         ctx.strokeRect(px, py, pw, ph);
 
-        // label – only draw text if there's room
         if (pw > 30 && ph > 14) {
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.font = '11px sans-serif';
@@ -301,54 +222,54 @@ function drawSheet(sheetIndex, sheetW, sheetH) {
             if (ph > 26) {
                 ctx.fillStyle = 'rgba(0,0,0,0.45)';
                 ctx.font = '10px sans-serif';
-                ctx.fillText(piece.w + '\u00d7' + piece.h, px + 4, py + 25);
+                ctx.fillText(`${piece.w}×${piece.h}`, px + 4, py + 25);
             }
         }
-    });
+    }
 
-    // label for the sheet info
-    document.getElementById('canvasLabel').textContent = 'Sheet ' + (sheetIndex + 1) + ' of ' + sheets.length;
+    document.getElementById('canvasLabel').textContent =
+        `Sheet ${sheetIndex + 1} of ${state.sheets.length}`;
 
-    var placed = sheet.placed.length;
-    var usedArea = 0;
-    sheet.placed.forEach(function(p) { usedArea += p.w * p.h; });
-    var sheetEff = ((usedArea / (sheetW * sheetH)) * 100).toFixed(1);
+    const placed = sheet.placed.length;
+    const usedArea = sheet.placed.reduce((sum, p) => sum + p.w * p.h, 0);
+    const sheetEff = ((usedArea / (sheetW * sheetH)) * 100).toFixed(1);
 
     document.getElementById('sheetInfo').textContent =
-        placed + ' piece' + (placed !== 1 ? 's' : '') + ' on this sheet – ' + sheetEff + '% used';
+        `${placed} piece${placed !== 1 ? 's' : ''} on this sheet – ${sheetEff}% used`;
 }
 
 // ---- Export ----
 
 function exportCutListCSV() {
-    if (!sheets.length) return;
+    if (!state.sheets.length) return;
 
-    var rows = ['Sheet,Piece,Width (mm),Height (mm),X (mm),Y (mm)'];
-    sheets.forEach(function(sheet, si) {
-        sheet.placed.forEach(function(p) {
-            rows.push((si + 1) + ',' + p.name + ',' + p.w + ',' + p.h + ',' + Math.round(p.x) + ',' + Math.round(p.y));
-        });
+    const rows = ['Sheet,Piece,Width (mm),Height (mm),X (mm),Y (mm)'];
+    state.sheets.forEach((sheet, si) => {
+        for (const p of sheet.placed) {
+            rows.push(`${si + 1},${p.name},${p.w},${p.h},${Math.round(p.x)},${Math.round(p.y)}`);
+        }
     });
 
-    var totalPieceArea = 0;
-    sheets.forEach(function(s) { s.placed.forEach(function(p) { totalPieceArea += p.w * p.h; }); });
-    var eff = ((totalPieceArea / (sheets.length * lastSheetW * lastSheetH)) * 100).toFixed(1);
+    const totalPieceArea = state.sheets
+        .flatMap(s => s.placed)
+        .reduce((sum, p) => sum + p.w * p.h, 0);
+    const eff = ((totalPieceArea / (state.sheets.length * state.lastSheetW * state.lastSheetH)) * 100).toFixed(1);
 
     rows.push('');
     rows.push('Summary');
     rows.push('Total Sheets,Efficiency,Waste');
-    rows.push(sheets.length + ',' + eff + '%,' + (100 - eff).toFixed(1) + '%');
+    rows.push(`${state.sheets.length},${eff}%,${(100 - eff).toFixed(1)}%`);
 
     downloadFile('cut-list.csv', rows.join('\n'), 'text/csv');
 }
 
 function saveSheetImage() {
-    var canvas = document.getElementById('cutCanvas');
-    downloadFile('cut-sheet-' + (currentSheet + 1) + '.png', canvas.toDataURL('image/png'), null, true);
+    const canvas = document.getElementById('cutCanvas');
+    downloadFile(`cut-sheet-${state.currentSheet + 1}.png`, canvas.toDataURL('image/png'), null, true);
 }
 
-function downloadFile(filename, data, mime, isUrl) {
-    var a = document.createElement('a');
+function downloadFile(filename, data, mime, isUrl = false) {
+    const a = document.createElement('a');
     if (isUrl) {
         a.href = data;
     } else {
@@ -357,3 +278,15 @@ function downloadFile(filename, data, mime, isUrl) {
     a.download = filename;
     a.click();
 }
+
+// ---- Expose the handlers referenced by inline HTML onclick attributes ----
+
+Object.assign(window, {
+    onMaterialChange,
+    addPiece,
+    removePiece,
+    clearAll,
+    runOptimiser,
+    exportCutListCSV,
+    saveSheetImage,
+});
