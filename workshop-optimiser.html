@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop Layout Optimiser – Digital Carpenter's Toolbelt</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <button class="burger-btn" onclick="toggleMenu()">&#9776;</button>
+
+    <div class="nav-overlay" id="navOverlay" onclick="toggleMenu()"></div>
+
+    <nav class="nav-drawer" id="navDrawer">
+        <div class="drawer-top">
+            <img src="logo.png" class="drawer-logo" alt="">
+            <button class="drawer-close" onclick="toggleMenu()">&#10005;</button>
+        </div>
+        <div class="drawer-section">
+            <p class="drawer-label">Tools</p>
+            <a href="index.html" class="drawer-link">&#8962; Dashboard</a>
+            <a href="sheet-optimiser.html" class="drawer-link">Sheet Material Optimiser</a>
+            <a href="seating-optimiser.html" class="drawer-link">Space Planner</a>
+            <a href="workshop-optimiser.html" class="drawer-link active">Workshop Layout Optimiser</a>
+            <a href="3d-visualiser.html" class="drawer-link">3D Furniture Visualiser</a>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Export</p>
+            <button class="drawer-action" onclick="saveWorkshopImage();toggleMenu()">&#8595; Save Floor Plan (PNG)</button>
+            <button class="drawer-action" onclick="exportWorkshopCSV();toggleMenu()">&#8595; Export Layout Data (CSV)</button>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Settings</p>
+            <span class="drawer-link" style="opacity:0.4;cursor:default">More options coming soon</span>
+        </div>
+        <div class="drawer-footer">Anton Morris &mdash; 2274309 &mdash; Nevawood Joinery</div>
+    </nav>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navDrawer').classList.toggle('open');
+            document.getElementById('navOverlay').classList.toggle('open');
+        }
+    </script>
+
+    <main>
+        <div class="tool-page">
+
+            <aside>
+                <div class="panel">
+                    <h2>Workshop</h2>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Width (m)</label>
+                            <input type="number" id="shopW" value="10" min="3" step="0.5">
+                        </div>
+                        <div class="form-group">
+                            <label>Depth (m)</label>
+                            <input type="number" id="shopD" value="12" min="3" step="0.5">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Workflow Pattern</label>
+                        <select id="workflow">
+                            <option value="assembly">Assembly Line (sequential – table saw focused)</option>
+                            <option value="jobshop">Job Shop (bespoke – workbench centred)</option>
+                            <option value="cellular">Cellular (zones – cutting, assembly, finishing)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel mt-12">
+                    <h2>Add a Machine / Bench</h2>
+
+                    <div class="form-group">
+                        <label>Machine Type</label>
+                        <select id="machinePreset" onchange="loadPreset()">
+                            <option value="custom">– Custom –</option>
+                            <option value="tablesaw">Table Saw</option>
+                            <option value="mitre">Mitre Saw</option>
+                            <option value="bandsaw">Bandsaw</option>
+                            <option value="planer">Planer / Thicknesser</option>
+                            <option value="bench">Workbench</option>
+                            <option value="assembly">Assembly Table</option>
+                            <option value="storage">Sheet Storage Rack</option>
+                            <option value="dust">Dust Extractor</option>
+                            <option value="drillpress">Drill Press</option>
+                            <option value="finishing">Finishing Area</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Label</label>
+                        <input type="text" id="machineName" placeholder="Table Saw">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Width (mm)</label>
+                            <input type="number" id="machineW" placeholder="2000">
+                        </div>
+                        <div class="form-group">
+                            <label>Depth (mm)</label>
+                            <input type="number" id="machineD" placeholder="1500">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Clearance all sides (mm)</label>
+                        <input type="number" id="machineClear" value="1000" min="300">
+                    </div>
+
+                    <button class="btn btn-secondary" onclick="addMachine()" style="width:100%">Add Machine</button>
+
+                    <hr class="divider">
+
+                    <div id="machineList" class="tool-list">
+                        <div class="empty-state"><p>No machines added yet</p></div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="runWorkshopLayout()">Generate Layout</button>
+                    <button class="btn btn-secondary mt-8" style="width:100%" onclick="clearMachines()">Clear All</button>
+                </div>
+            </aside>
+
+            <div>
+                <div id="emptyResults" class="panel">
+                    <div class="empty-state">
+                        <svg width="60" height="60" viewBox="0 0 60 60" fill="none" opacity="0.3">
+                            <rect x="4" y="4" width="52" height="52" rx="2" stroke="#2c3e50" stroke-width="2"/>
+                            <rect x="10" y="10" width="16" height="10" rx="1" fill="#2c3e50" opacity="0.5"/>
+                            <rect x="34" y="10" width="16" height="10" rx="1" fill="#2c3e50" opacity="0.3"/>
+                            <rect x="10" y="28" width="10" height="20" rx="1" fill="#2c3e50" opacity="0.4"/>
+                        </svg>
+                        <p>Add your machines and pick a workflow, then Generate.</p>
+                    </div>
+                </div>
+
+                <div id="results" style="display:none">
+
+                    <div class="panel">
+                        <h2>Layout Stats</h2>
+                        <div class="stats-row">
+                            <div class="stat-box">
+                                <span class="stat-value" id="statMachines">–</span>
+                                <span class="stat-label">Machines</span>
+                            </div>
+                            <div class="stat-box good">
+                                <span class="stat-value" id="statPlaced">–</span>
+                                <span class="stat-label">Placed</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-value" id="statFlow">–</span>
+                                <span class="stat-label">Flow Score</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel mt-12">
+                        <h2>Floor Plan</h2>
+                        <div class="canvas-container">
+                            <div class="canvas-label" id="workshopLabel">Workshop Layout</div>
+                            <canvas id="workshopCanvas" width="700" height="500"></canvas>
+                        </div>
+                        <p class="text-sm text-muted mt-8" id="workshopInfo"></p>
+                        <div style="display:flex;gap:8px;margin-top:10px">
+                            <button class="btn btn-secondary" onclick="saveWorkshopImage()" style="font-size:0.8rem;padding:7px 14px">&#8595; Save Image</button>
+                            <button class="btn btn-secondary" onclick="exportWorkshopCSV()" style="font-size:0.8rem;padding:7px 14px">&#8595; Export Layout CSV</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer>
+        <p>Digital Carpenter's Toolbelt &mdash; Anton Morris &mdash; 2274309</p>
+    </footer>
+
+    <script src="js/workshop-optimiser.js"></script>
+</body>
+</html>
