@@ -9,11 +9,12 @@ desktop.ini
 *.swp
 *~
 
-# --- Node (in case Jest is added later) ---
+# --- Node / Jest ---
 node_modules/
 npm-debug.log
 package-lock.json.bak
 coverage/
+.jest-cache/
 
 # --- Dissertation build artefacts ---
 *.aux

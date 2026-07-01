@@ -1,0 +1,29 @@
+{
+  "name": "digital-carpenters-toolbelt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-based calculation tools for Nevawood Joinery. CSF300 dissertation project, Swansea University.",
+  "author": "Anton Morris <antonglennmorris@googlemail.com>",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "serve": "python -m http.server 8080"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "js/algorithms/**/*.js"
+    ],
+    "coverageReporters": [
+      "text",
+      "text-summary",
+      "html",
+      "lcov"
+    ]
+  }
+}
