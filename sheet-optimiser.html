@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sheet Material Optimiser – Digital Carpenter's Toolbelt</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <button class="burger-btn" onclick="toggleMenu()">&#9776;</button>
+
+    <div class="nav-overlay" id="navOverlay" onclick="toggleMenu()"></div>
+
+    <nav class="nav-drawer" id="navDrawer">
+        <div class="drawer-top">
+            <img src="logo.png" class="drawer-logo" alt="">
+            <button class="drawer-close" onclick="toggleMenu()">&#10005;</button>
+        </div>
+        <div class="drawer-section">
+            <p class="drawer-label">Tools</p>
+            <a href="index.html" class="drawer-link">&#8962; Dashboard</a>
+            <a href="sheet-optimiser.html" class="drawer-link active">Sheet Material Optimiser</a>
+            <a href="seating-optimiser.html" class="drawer-link">Space Planner</a>
+            <a href="workshop-optimiser.html" class="drawer-link">Workshop Layout Optimiser</a>
+            <a href="3d-visualiser.html" class="drawer-link">3D Furniture Visualiser</a>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Export</p>
+            <button class="drawer-action" onclick="saveSheetImage();toggleMenu()">&#8595; Save Cut Diagram (PNG)</button>
+            <button class="drawer-action" onclick="exportCutListCSV();toggleMenu()">&#8595; Export Cut List (CSV)</button>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section">
+            <p class="drawer-label">Settings</p>
+            <span class="drawer-link" style="opacity:0.4;cursor:default">More options coming soon</span>
+        </div>
+        <div class="drawer-footer">Anton Morris &mdash; 2274309 &mdash; Nevawood Joinery</div>
+    </nav>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navDrawer').classList.toggle('open');
+            document.getElementById('navOverlay').classList.toggle('open');
+        }
+    </script>
+
+    <main>
+        <div class="tool-page">
+
+            <!-- Left panel: inputs -->
+            <aside>
+
+                <div class="panel">
+                    <h2>Sheet Settings</h2>
+
+                    <div class="form-group">
+                        <label>Material Type</label>
+                        <select id="materialType" onchange="onMaterialChange()">
+                            <option value="plywood">Plywood (2440 &times; 1220)</option>
+                            <option value="mdf">MDF (2800 &times; 2070)</option>
+                            <option value="veneer">Veneer (2440 &times; 1220, no rotation)</option>
+                            <option value="custom">Custom size</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row" id="customSizeRow" style="display:none">
+                        <div class="form-group">
+                            <label>Width (mm)</label>
+                            <input type="number" id="sheetW" value="2440" min="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Height (mm)</label>
+                            <input type="number" id="sheetH" value="1220" min="100">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Saw Kerf (mm)</label>
+                        <input type="number" id="kerf" value="3" min="0" max="10">
+                    </div>
+                </div>
+
+                <div class="panel mt-12">
+                    <h2>Add a Piece</h2>
+
+                    <div class="form-group">
+                        <label>Name / Label</label>
+                        <input type="text" id="pieceName" placeholder="e.g. Side Panel A" maxlength="20">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Width (mm)</label>
+                            <input type="number" id="pieceW" placeholder="600" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Height (mm)</label>
+                            <input type="number" id="pieceH" placeholder="400" min="1">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="pieceQty" value="1" min="1" max="100">
+                    </div>
+
+                    <button class="btn btn-secondary" onclick="addPiece()" style="width:100%">Add Piece</button>
+
+                    <hr class="divider">
+
+                    <div id="pieceList" class="piece-list">
+                        <div class="empty-state">
+                            <p>No pieces added yet</p>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="runOptimiser()">Calculate Cutting Layout</button>
+                    <button class="btn btn-secondary mt-8" style="width:100%" onclick="clearAll()">Clear All</button>
+                </div>
+
+            </aside>
+
+            <!-- Right panel: results -->
+            <div>
+
+                <div id="emptyResults" class="panel">
+                    <div class="empty-state">
+                        <svg width="60" height="60" viewBox="0 0 60 60" fill="none" opacity="0.3">
+                            <rect x="6" y="6" width="48" height="48" rx="3" stroke="#2c3e50" stroke-width="2"/>
+                            <rect x="6" y="6" width="22" height="22" fill="#2c3e50" opacity="0.3"/>
+                            <rect x="30" y="6" width="12" height="12" fill="#2c3e50" opacity="0.5"/>
+                        </svg>
+                        <p>Add some pieces and hit Calculate to see the cutting layout.</p>
+                    </div>
+                </div>
+
+                <div id="results" style="display:none">
+
+                    <div class="panel">
+                        <h2>Results</h2>
+                        <div class="stats-row">
+                            <div class="stat-box">
+                                <span class="stat-value" id="statSheets">–</span>
+                                <span class="stat-label">Sheets Needed</span>
+                            </div>
+                            <div class="stat-box" id="effBox">
+                                <span class="stat-value" id="statEfficiency">–</span>
+                                <span class="stat-label">Efficiency</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-value" id="statWaste">–</span>
+                                <span class="stat-label">Waste</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-value" id="statPieces">–</span>
+                                <span class="stat-label">Total Pieces</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel mt-12">
+                        <h2>Cutting Diagrams</h2>
+                        <div class="sheet-tabs" id="sheetTabs"></div>
+                        <div class="canvas-container">
+                            <div class="canvas-label" id="canvasLabel">Sheet 1</div>
+                            <canvas id="cutCanvas" width="700" height="350"></canvas>
+                        </div>
+                        <p class="text-sm text-muted mt-8" id="sheetInfo"></p>
+                        <div style="display:flex;gap:8px;margin-top:10px">
+                            <button class="btn btn-secondary" onclick="saveSheetImage()" style="font-size:0.8rem;padding:7px 14px">&#8595; Save Image</button>
+                            <button class="btn btn-secondary" onclick="exportCutListCSV()" style="font-size:0.8rem;padding:7px 14px">&#8595; Export Cut List CSV</button>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Digital Carpenter's Toolbelt &mdash; Anton Morris &mdash; 2274309</p>
+    </footer>
+
+    <script src="js/sheet-optimiser.js"></script>
+</body>
+</html>
