@@ -19,6 +19,9 @@ const SHEET_PRESETS = {
     veneer:  { w: 2440, h: 1220 },
 };
 
+// localStorage key used to receive a cut list from the 3D visualiser.
+const HANDOFF_KEY = 'dc-sheet-handoff';
+
 // Mutable UI state kept in a single object so it's easy to reason about.
 const state = {
     pieces: [],
@@ -279,6 +282,57 @@ function downloadFile(filename, data, mime, isUrl = false) {
     a.click();
 }
 
+// ---- Hand-off receiver: pick up a cut list from the 3D visualiser ----
+
+function consumeHandoff() {
+    const raw = localStorage.getItem(HANDOFF_KEY);
+    if (!raw) return;
+
+    let payload;
+    try {
+        payload = JSON.parse(raw);
+    } catch {
+        localStorage.removeItem(HANDOFF_KEY);
+        return;
+    }
+    if (!payload || !Array.isArray(payload.pieces)) {
+        localStorage.removeItem(HANDOFF_KEY);
+        return;
+    }
+
+    // Assign fresh colours from the palette (drop whatever the 3D
+    // visualiser chose --- our colour convention here is one-per-piece
+    // to help the eye track the cut diagram).
+    for (const p of payload.pieces) {
+        p.colour = COLOURS[state.colourIndex % COLOURS.length];
+        state.colourIndex++;
+    }
+
+    state.pieces = payload.pieces;
+    renderPieceList();
+
+    // Show a banner naming the source so the user knows where the pieces
+    // came from.  Dismiss button clears it and the localStorage entry.
+    const banner = document.getElementById('handoffBanner');
+    if (banner) {
+        banner.innerHTML = `
+            <div>
+                <strong>${payload.pieces.length} piece${payload.pieces.length === 1 ? '' : 's'}</strong>
+                imported from <em>${payload.source || '3D Visualiser'}</em>. Press <em>Run Optimiser</em> to lay them out.
+            </div>
+            <button onclick="dismissHandoff()" title="Dismiss">&#10005;</button>
+        `;
+        banner.style.display = 'flex';
+    }
+
+    localStorage.removeItem(HANDOFF_KEY);
+}
+
+function dismissHandoff() {
+    const banner = document.getElementById('handoffBanner');
+    if (banner) banner.style.display = 'none';
+}
+
 // ---- Expose the handlers referenced by inline HTML onclick attributes ----
 
 Object.assign(window, {
@@ -289,4 +343,9 @@ Object.assign(window, {
     runOptimiser,
     exportCutListCSV,
     saveSheetImage,
+    dismissHandoff,
 });
+
+// Kick off the hand-off consumer once the DOM is parsed (type="module"
+// scripts are deferred, so DOM elements are already available).
+consumeHandoff();

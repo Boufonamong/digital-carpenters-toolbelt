@@ -5,6 +5,12 @@
 // generators here consume dimensions + wood colour and emit box-primitive
 // scene graphs which are exported as GLTF for the downstream Blender
 // rendering pipeline.
+//
+// The bench-parts.js module is the authoritative source of truth for the
+// component list.  This file uses it to populate the parts panel and the
+// cut-list hand-off; the mesh generators below use the same numbers.
+
+import { benchParts, partsToPieces } from './algorithms/bench-parts.js';
 
 const WOOD_COLOURS = {
     oak:    0xc8a96e,
@@ -16,12 +22,16 @@ const WOOD_COLOURS = {
 
 const BENCH_SIZES = [1000, 1200, 2000, 2400, 3000, 3600, 4800, 5000, 5600, 6000];
 
+// Key used to hand off a cut list to the sheet optimiser via localStorage.
+const HANDOFF_KEY = 'dc-sheet-handoff';
+
 const state = {
     scene: null,
     camera: null,
     renderer: null,
     controls: null,
     furnitureGroup: null,
+    currentParts: null, // { parts, meta } from bench-parts
 };
 
 function initViewer() {
@@ -112,27 +122,35 @@ function buildModel() {
 
     state.furnitureGroup = new THREE.Group();
 
+    // Compute size input.
+    const size = (type === 'roundbench')
+        ? (parseInt(document.getElementById('productRadius').value, 10) || 1000)
+        : (parseInt(document.getElementById('productSize').value, 10) || 2000);
+
+    // Update the parts model --- this is what feeds the parts panel and hand-off.
+    state.currentParts = benchParts(type, size);
+
+    // Build the 3D geometry.
     if (type === 'roundbench') {
-        const radius = parseInt(document.getElementById('productRadius').value, 10) || 1000;
-        buildRoundBench(radius, mat, edgeMat);
-        document.getElementById('modelLabel').textContent = `Round Bench – ${(radius / 1000).toFixed(0)}m radius`;
-        state.camera.position.set(radius * 2.6, radius * 1.4, radius * 2.6);
+        buildRoundBench(size, mat, edgeMat);
+        state.camera.position.set(size * 2.6, size * 1.4, size * 2.6);
         state.controls.target.set(0, 400, 0);
+    } else if (type === 'crossbench') {
+        buildCrossBench(size, mat, edgeMat);
+        state.camera.position.set(size * 0.85, 1200, 2000);
+        state.controls.target.set(0, 380, 0);
     } else {
-        const len = parseInt(document.getElementById('productSize').value, 10) || 2000;
-        if (type === 'crossbench') {
-            buildCrossBench(len, mat, edgeMat);
-            document.getElementById('modelLabel').textContent = `Criss-Cross Bench – ${(len / 1000).toFixed(1)}m`;
-        } else {
-            buildPicnicBench(len, mat, edgeMat);
-            document.getElementById('modelLabel').textContent = `Pub / Picnic Bench – ${(len / 1000).toFixed(1)}m`;
-        }
-        state.camera.position.set(len * 0.85, 1200, 2000);
+        buildPicnicBench(size, mat, edgeMat);
+        state.camera.position.set(size * 0.85, 1200, 2000);
         state.controls.target.set(0, 380, 0);
     }
 
+    document.getElementById('modelLabel').textContent = state.currentParts.meta.label;
+
     state.scene.add(state.furnitureGroup);
     state.controls.update();
+
+    renderPartsPanel();
 }
 
 // Adds a box mesh centred at (x, y, z) with optional edge overlay.
@@ -269,6 +287,92 @@ function buildRoundBench(radius, mat, edgeMat) {
     ));
 }
 
+// ---- Parts panel + cut-list hand-off --------------------------------
+
+function renderPartsPanel() {
+    const panel = document.getElementById('partsPanel');
+    if (!panel || !state.currentParts) return;
+
+    const { parts } = state.currentParts;
+    const sheetCount = parts.filter(p => p.stockType === 'sheet').reduce((s, p) => s + p.qty, 0);
+    const timberCount = parts.filter(p => p.stockType === 'timber').reduce((s, p) => s + p.qty, 0);
+
+    const rows = parts.map(p => `
+        <tr>
+            <td>
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.colour || '#999'};margin-right:6px"></span>
+                ${p.name}
+            </td>
+            <td style="text-align:center">${p.stockType}</td>
+            <td style="text-align:right">${p.w} × ${p.h}${p.stockType === 'timber' ? '' : ` × ${p.d}mm`}</td>
+            <td style="text-align:center">${p.qty}</td>
+        </tr>
+    `).join('');
+
+    panel.innerHTML = `
+        <div class="parts-summary">
+            <span><strong>${sheetCount}</strong> sheet parts</span>
+            <span><strong>${timberCount}</strong> timber sections</span>
+        </div>
+        <table class="parts-table">
+            <thead>
+                <tr>
+                    <th style="text-align:left">Component</th>
+                    <th>Stock</th>
+                    <th style="text-align:right">Dimensions (mm)</th>
+                    <th>Qty</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <div class="parts-actions">
+            <button class="btn btn-secondary" onclick="exportPartsCSV()">&#8595; Parts CSV</button>
+            <button class="btn btn-primary" style="width:auto;padding:9px 16px;margin-top:0" onclick="sendToSheetOptimiser()">
+                Send sheet parts to Sheet Optimiser &rarr;
+            </button>
+        </div>
+    `;
+}
+
+function exportPartsCSV() {
+    if (!state.currentParts) return;
+    const { parts, meta } = state.currentParts;
+
+    const rows = [
+        'Nevawood Bench Parts List',
+        `Product,${meta.label}`,
+        '',
+        'Component,Stock Type,Width (mm),Height / Length (mm),Depth (mm),Qty',
+    ];
+    for (const p of parts) {
+        rows.push(`${p.name},${p.stockType},${p.w},${p.h},${p.d},${p.qty}`);
+    }
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
+    a.download = `nevawood-${meta.type}-${meta.size}-parts.csv`;
+    a.click();
+}
+
+function sendToSheetOptimiser() {
+    if (!state.currentParts) return;
+
+    const pieces = partsToPieces(state.currentParts, { includeTimber: false });
+    if (pieces.length === 0) {
+        alert('This bench has no sheet parts to send.');
+        return;
+    }
+
+    const payload = {
+        source: `3D Visualiser --- ${state.currentParts.meta.label}`,
+        timestamp: new Date().toISOString(),
+        pieces,
+    };
+    localStorage.setItem(HANDOFF_KEY, JSON.stringify(payload));
+
+    window.location.href = 'sheet-optimiser.html?handoff=1';
+}
+
 function exportGLTF() {
     if (!state.furnitureGroup) {
         alert('Generate a model first.');
@@ -292,4 +396,6 @@ Object.assign(window, {
     onTypeChange,
     buildModel,
     exportGLTF,
+    exportPartsCSV,
+    sendToSheetOptimiser,
 });
