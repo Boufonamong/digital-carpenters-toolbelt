@@ -43,4 +43,7 @@ dissertation/*.blg
 dissertation/*.fls
 dissertation/*.fdb_latexmk
 dissertation/*.synctex.gz
+dissertation/*.maf
+dissertation/*.mtc
+dissertation/*.mtc[0-9]*
 dissertation/chapter/*.aux
