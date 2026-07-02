@@ -1,9 +1,11 @@
-// Space Layout Planner --- Nevawood Joinery
-//
-// Two modes:
-//   - bench : cycle through user-added Nevawood products filling the room
-//   - venue : one of five hardcoded parametric layouts
-//             (theatre, classroom, boardroom, church, pub)
+// Space Layout Planner --- UI wrapper.
+// Algorithm implementations live in js/algorithms/space-layouts.js.
+
+import {
+    runBenchLayout,
+    runVenueLayout,
+    calcCovers,
+} from './algorithms/space-layouts.js';
 
 const PRODUCTS = {
     picnic: {
@@ -116,16 +118,6 @@ function renderProductList() {
     list.innerHTML = html;
 }
 
-function calcCovers(entry) {
-    if (entry.type === 'roundbench') {
-        return Math.floor(2 * Math.PI * entry.radius / 500);
-    }
-    if (entry.type === 'crossbench') {
-        return Math.floor(entry.length / 450);
-    }
-    return Math.floor(entry.length / 450) * 2;
-}
-
 // ---- Layout entry point ----
 
 function runLayout() {
@@ -139,7 +131,8 @@ function runLayout() {
 
     let placed;
     if (mode === 'venue') {
-        placed = runVenueLayout(roomW, roomD, aisleGap);
+        const style = document.getElementById('venueStyle').value;
+        placed = runVenueLayout(style, { roomW, roomD, aisleGap });
         if (!placed.length) {
             alert('Room is too small for this venue style. Try larger dimensions.');
             return;
@@ -149,320 +142,19 @@ function runLayout() {
             alert('Add at least one product first.');
             return;
         }
-        placed = runBenchLayout(roomW, roomD, aisleGap);
+        placed = runBenchLayout({
+            products: state.placementList,
+            roomW,
+            roomD,
+            aisleGap,
+        });
     }
 
     state.lastLayout = placed;
     showResults(placed, roomW, roomD);
 }
 
-// ---- Bench layout (product-cycling algorithm) ----
-
-function runBenchLayout(roomW, roomD, aisleGap) {
-    const wallClear = 400;
-    const placed = [];
-    let curY = wallClear;
-    const n = state.placementList.length;
-    let idx = 0;
-    let skipped = 0;
-
-    while (curY < roomD - wallClear) {
-        const prod = state.placementList[idx % n];
-        idx++;
-
-        const rowH = (prod.type === 'roundbench') ? prod.radius * 2 : prod.depth;
-
-        if (curY + rowH > roomD - wallClear) {
-            skipped++;
-            if (skipped >= n) break;
-            continue;
-        }
-
-        skipped = 0;
-
-        if (prod.type === 'roundbench') {
-            const diam = prod.radius * 2;
-            let curX = wallClear;
-            while (curX + diam <= roomW - wallClear) {
-                placed.push({
-                    type: 'roundbench', isRound: true,
-                    cx: curX + prod.radius,
-                    cy: curY + prod.radius,
-                    radius: prod.radius,
-                    colour: prod.colour,
-                    label: prod.label,
-                    displaySize: prod.displaySize,
-                    covers: calcCovers(prod),
-                });
-                curX += diam + aisleGap;
-            }
-        } else {
-            let curX = wallClear;
-            while (curX + prod.length <= roomW - wallClear) {
-                placed.push({
-                    type: prod.type, isRound: false,
-                    x: curX, y: curY,
-                    length: prod.length, depth: prod.depth,
-                    colour: prod.colour,
-                    label: prod.label,
-                    displaySize: prod.displaySize,
-                    covers: calcCovers(prod),
-                });
-                curX += prod.length + 50;
-            }
-        }
-
-        curY += rowH + aisleGap;
-    }
-
-    return placed;
-}
-
-// ---- Venue layouts ----
-
-function runVenueLayout(roomW, roomD, aisleGap) {
-    const style = document.getElementById('venueStyle').value;
-    if (style === 'theatre')   return layoutTheatre(roomW, roomD, aisleGap);
-    if (style === 'classroom') return layoutClassroom(roomW, roomD, aisleGap);
-    if (style === 'boardroom') return layoutBoardroom(roomW, roomD);
-    if (style === 'church')    return layoutChurch(roomW, roomD, aisleGap);
-    if (style === 'pub')       return layoutPub(roomW, roomD, aisleGap);
-    return [];
-}
-
-// Theatre: rows of seats either side of a centre aisle, stage clearance at front.
-function layoutTheatre(roomW, roomD, aisleGap) {
-    const placed = [];
-    const wallClear = 400;
-    const stageClear = 800;
-    const seatW = 450;
-    const rowD = 400;
-    const rowSpacing = 900;
-    const centerAisle = Math.max(900, aisleGap);
-
-    const usableW = roomW - 2 * wallClear;
-    const halfSection = (usableW - centerAisle) / 2;
-    if (halfSection < seatW) return placed;
-
-    const seatsPerSection = Math.floor(halfSection / seatW);
-    const sectionW = seatsPerSection * seatW;
-    const xLeft = wallClear;
-    const xRight = wallClear + sectionW + centerAisle;
-    let curY = wallClear + stageClear;
-
-    while (curY + rowD <= roomD - wallClear) {
-        placed.push({
-            type: 'row', isRound: false,
-            x: xLeft, y: curY, length: sectionW, depth: rowD,
-            seatsInRow: seatsPerSection,
-            colour: '#5b8db8',
-            label: 'Theatre Row', displaySize: `${seatsPerSection} seats`,
-            covers: seatsPerSection,
-        });
-        placed.push({
-            type: 'row', isRound: false,
-            x: xRight, y: curY, length: sectionW, depth: rowD,
-            seatsInRow: seatsPerSection,
-            colour: '#5b8db8',
-            label: 'Theatre Row', displaySize: `${seatsPerSection} seats`,
-            covers: seatsPerSection,
-        });
-        curY += rowSpacing;
-    }
-    return placed;
-}
-
-// Classroom: desks in rows facing the front, split into two banks with centre aisle.
-function layoutClassroom(roomW, roomD, aisleGap) {
-    const placed = [];
-    const wallClear = 400;
-    const frontClear = 1200;
-    const deskW = 600;
-    const deskD = 400;
-    const rowSpacing = 1100;
-    const aisleW = Math.max(900, aisleGap);
-
-    const usableW = roomW - 2 * wallClear;
-    const halfSection = (usableW - aisleW) / 2;
-    let desksPerSection = Math.floor(halfSection / deskW);
-
-    if (desksPerSection < 1) {
-        desksPerSection = Math.floor(usableW / deskW);
-        const sectionW = desksPerSection * deskW;
-        const xStart = wallClear + (usableW - sectionW) / 2;
-        let curY = wallClear + frontClear;
-        while (curY + deskD <= roomD - wallClear) {
-            placed.push({
-                type: 'desk', isRound: false,
-                x: xStart, y: curY, length: sectionW, depth: deskD,
-                seatsInRow: desksPerSection,
-                colour: '#5b9f5b',
-                label: 'Desk Row', displaySize: `${desksPerSection} desks`,
-                covers: desksPerSection,
-            });
-            curY += rowSpacing;
-        }
-    } else {
-        const sectionW = desksPerSection * deskW;
-        const xLeft = wallClear;
-        const xRight = wallClear + sectionW + aisleW;
-        let curY = wallClear + frontClear;
-        while (curY + deskD <= roomD - wallClear) {
-            placed.push({
-                type: 'desk', isRound: false,
-                x: xLeft, y: curY, length: sectionW, depth: deskD,
-                seatsInRow: desksPerSection,
-                colour: '#5b9f5b',
-                label: 'Desk Row', displaySize: `${desksPerSection} desks`,
-                covers: desksPerSection,
-            });
-            placed.push({
-                type: 'desk', isRound: false,
-                x: xRight, y: curY, length: sectionW, depth: deskD,
-                seatsInRow: desksPerSection,
-                colour: '#5b9f5b',
-                label: 'Desk Row', displaySize: `${desksPerSection} desks`,
-                covers: desksPerSection,
-            });
-            curY += rowSpacing;
-        }
-    }
-    return placed;
-}
-
-// Boardroom: central table with perimeter chairs on all four sides.
-function layoutBoardroom(roomW, roomD) {
-    const placed = [];
-    const wallClear = 500;
-    const chairD = 400;
-    const gap = 150;
-
-    const tableW = roomW - 2 * (wallClear + chairD + gap);
-    const tableD = roomD - 2 * (wallClear + chairD + gap);
-    if (tableW < 600 || tableD < 600) return placed;
-
-    const tableX = wallClear + chairD + gap;
-    const tableY = wallClear + chairD + gap;
-
-    placed.push({
-        type: 'boardtable', isRound: false,
-        x: tableX, y: tableY, length: tableW, depth: tableD,
-        colour: '#c8a96e',
-        label: 'Boardroom Table',
-        displaySize: `${(tableW / 1000).toFixed(1)}m × ${(tableD / 1000).toFixed(1)}m`,
-        covers: 0,
-    });
-
-    const chairW = 500;
-    const topChairs = Math.floor(tableW / chairW);
-    const sideChairs = Math.floor(tableD / chairW);
-
-    if (topChairs > 0) {
-        placed.push({
-            type: 'row', isRound: false,
-            x: tableX, y: wallClear, length: tableW, depth: chairD,
-            seatsInRow: topChairs, colour: '#8b6340',
-            label: 'Chairs (top)', displaySize: `${topChairs} seats`,
-            covers: topChairs,
-        });
-        placed.push({
-            type: 'row', isRound: false,
-            x: tableX, y: tableY + tableD + gap, length: tableW, depth: chairD,
-            seatsInRow: topChairs, colour: '#8b6340',
-            label: 'Chairs (bottom)', displaySize: `${topChairs} seats`,
-            covers: topChairs,
-        });
-    }
-    if (sideChairs > 0) {
-        placed.push({
-            type: 'row', isRound: false,
-            x: wallClear, y: tableY, length: chairD, depth: tableD,
-            colour: '#8b6340',
-            label: 'Chairs (left)', displaySize: `${sideChairs} seats`,
-            covers: sideChairs,
-        });
-        placed.push({
-            type: 'row', isRound: false,
-            x: tableX + tableW + gap, y: tableY, length: chairD, depth: tableD,
-            colour: '#8b6340',
-            label: 'Chairs (right)', displaySize: `${sideChairs} seats`,
-            covers: sideChairs,
-        });
-    }
-    return placed;
-}
-
-// Church: pews in two sections either side of a centre aisle, side aisles, chancel clearance.
-function layoutChurch(roomW, roomD, aisleGap) {
-    const placed = [];
-    const wallClear = 400;
-    const chancelClear = 1500;
-    const sideAisle = 800;
-    const centerAisle = Math.max(1200, aisleGap); // UK Building Regs minimum
-    const pewD = 450;
-    const seatW = 500;
-    const pewSpacing = 900;
-
-    const usableW = roomW - 2 * (wallClear + sideAisle);
-    const halfSection = (usableW - centerAisle) / 2;
-    if (halfSection < seatW) return placed;
-
-    const seatsPerSection = Math.floor(halfSection / seatW);
-    const sectionW = seatsPerSection * seatW;
-    const xLeft = wallClear + sideAisle;
-    const xRight = wallClear + sideAisle + sectionW + centerAisle;
-    let curY = wallClear + chancelClear;
-
-    while (curY + pewD <= roomD - wallClear) {
-        placed.push({
-            type: 'pew', isRound: false,
-            x: xLeft, y: curY, length: sectionW, depth: pewD,
-            seatsInRow: seatsPerSection,
-            colour: '#b08060',
-            label: 'Pew', displaySize: `${seatsPerSection} seats`,
-            covers: seatsPerSection,
-        });
-        placed.push({
-            type: 'pew', isRound: false,
-            x: xRight, y: curY, length: sectionW, depth: pewD,
-            seatsInRow: seatsPerSection,
-            colour: '#b08060',
-            label: 'Pew', displaySize: `${seatsPerSection} seats`,
-            covers: seatsPerSection,
-        });
-        curY += pewSpacing;
-    }
-    return placed;
-}
-
-// Pub / Bar: grid of 4-cover square table units.
-function layoutPub(roomW, roomD, aisleGap) {
-    const placed = [];
-    const wallClear = 400;
-    const tableSize = 700;
-    const chairRim = 350;
-    const unitSize = tableSize + 2 * chairRim;
-    const gap = Math.max(600, aisleGap);
-
-    let curX = wallClear;
-    while (curX + unitSize <= roomW - wallClear) {
-        let curY = wallClear;
-        while (curY + unitSize <= roomD - wallClear) {
-            placed.push({
-                type: 'pubtable', isRound: false,
-                x: curX, y: curY, length: unitSize, depth: unitSize,
-                colour: '#c8a965',
-                label: 'Pub Table', displaySize: '4 covers',
-                covers: 4,
-            });
-            curY += unitSize + gap;
-        }
-        curX += unitSize + gap;
-    }
-    return placed;
-}
-
-// ---- Results ----
+// ---- Results / Rendering ----
 
 function showResults(placed, roomW, roomD) {
     let totalCovers = 0;
@@ -654,5 +346,4 @@ Object.assign(window, {
     saveSeatingImage,
 });
 
-// Populate the default product size dropdown once the module loads.
 populateSizes('picnic');
