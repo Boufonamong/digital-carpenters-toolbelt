@@ -20,6 +20,84 @@ const WOOD_COLOURS = {
     dark:   0x2e2319,
 };
 
+// ---- Procedural wood-grain texture ------------------------------------
+// Generated once in a canvas.  Kept as a monochrome (white base + dark
+// grain) so the MeshStandardMaterial's colour tints it to the selected
+// wood finish.
+
+let WOOD_TEXTURE = null;
+
+// Background gradient rendered into a small canvas + used as scene bg.
+function makeBackground() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0, '#e6ecf1');   // sky-ish top
+    grad.addColorStop(0.65, '#d3d9e0');
+    grad.addColorStop(1, '#b8bfc7');   // floor-ish bottom
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 2, 512);
+    return new THREE.CanvasTexture(canvas);
+}
+
+function getWoodTexture() {
+    if (WOOD_TEXTURE) return WOOD_TEXTURE;
+
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Base --- solid white, tinted by the material colour later.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+
+    // Horizontal grain lines --- wavy so they don't look like ruled paper.
+    for (let i = 0; i < 90; i++) {
+        const yBase = Math.random() * size;
+        const thickness = 0.3 + Math.random() * 1.8;
+        const alpha = 0.05 + Math.random() * 0.14;
+        ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+        ctx.lineWidth = thickness;
+        ctx.beginPath();
+        const wobble = 3 + Math.random() * 6;
+        for (let x = 0; x <= size; x += 8) {
+            const y = yBase + Math.sin((x / size) * Math.PI * (2 + Math.random() * 2)) * wobble;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+
+    // Occasional darker knots for character.
+    for (let i = 0; i < 4; i++) {
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const r = 4 + Math.random() * 7;
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+        grad.addColorStop(0, 'rgba(0,0,0,0.28)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Pore noise --- tiny dots for wood pore texture.
+    for (let i = 0; i < 1500; i++) {
+        ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.09})`;
+        ctx.fillRect(Math.random() * size, Math.random() * size, 1, 1);
+    }
+
+    WOOD_TEXTURE = new THREE.CanvasTexture(canvas);
+    WOOD_TEXTURE.wrapS = WOOD_TEXTURE.wrapT = THREE.RepeatWrapping;
+    WOOD_TEXTURE.anisotropy = 8;
+    return WOOD_TEXTURE;
+}
+
 const BENCH_SIZES = [1000, 1200, 2000, 2400, 3000, 3600, 4800, 5000, 5600, 6000];
 
 // Key used to hand off a cut list to the sheet optimiser via localStorage.
@@ -40,7 +118,7 @@ function initViewer() {
     const vh = container.clientHeight;
 
     state.scene = new THREE.Scene();
-    state.scene.background = new THREE.Color(0xf0f2f5);
+    state.scene.background = makeBackground();
 
     state.camera = new THREE.PerspectiveCamera(45, vw / vh, 1, 60000);
     state.camera.position.set(2200, 1300, 2600);
@@ -49,15 +127,32 @@ function initViewer() {
     state.renderer.setPixelRatio(window.devicePixelRatio);
     state.renderer.setSize(vw, vh);
     state.renderer.shadowMap.enabled = true;
+    state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(state.renderer.domElement);
 
     state.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const sun = new THREE.DirectionalLight(0xffffff, 0.85);
     sun.position.set(2000, 3000, 1500);
     sun.castShadow = true;
+    // Widen the shadow frustum so it covers the whole bench + ground plane.
+    sun.shadow.camera.left = -5000;
+    sun.shadow.camera.right = 5000;
+    sun.shadow.camera.top = 5000;
+    sun.shadow.camera.bottom = -5000;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 12000;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0005;
     state.scene.add(sun);
 
-    state.scene.add(new THREE.GridHelper(8000, 32, 0xbbbbbb, 0xdddddd));
+    // Shadow-catching ground plane replaces the wireframe grid.
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(20000, 20000),
+        new THREE.ShadowMaterial({ opacity: 0.22 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    state.scene.add(ground);
 
     state.controls = new THREE.OrbitControls(state.camera, state.renderer.domElement);
     state.controls.enableDamping = true;
@@ -117,8 +212,13 @@ function buildModel() {
     const type = document.getElementById('productType').value;
     const colKey = document.getElementById('woodColour').value;
     const colour = WOOD_COLOURS[colKey] || WOOD_COLOURS.oak;
-    const mat = new THREE.MeshLambertMaterial({ color: colour });
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.25 });
+    const mat = new THREE.MeshStandardMaterial({
+        color: colour,
+        map: getWoodTexture(),
+        roughness: 0.72,
+        metalness: 0.02,
+    });
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.22 });
 
     state.furnitureGroup = new THREE.Group();
 
