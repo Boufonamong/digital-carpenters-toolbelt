@@ -31,19 +31,5 @@ coverage/
 scratch/
 tmp/
 
-# --- LaTeX build artefacts in dissertation/ ---
-dissertation/*.aux
-dissertation/*.log
-dissertation/*.out
-dissertation/*.toc
-dissertation/*.lof
-dissertation/*.lot
-dissertation/*.bbl
-dissertation/*.blg
-dissertation/*.fls
-dissertation/*.fdb_latexmk
-dissertation/*.synctex.gz
-dissertation/*.maf
-dissertation/*.mtc
-dissertation/*.mtc[0-9]*
-dissertation/chapter/*.aux
+# --- Dissertation directory kept out of source control ---
+dissertation/
